@@ -70,23 +70,23 @@ that corresponding paragraphs. Current this file is testing on "glass" data. '''
 #times = 2
 
 
-#'''Abalone data'''
-#da_abalone = pd.read_csv('/home/grad/yz486/ImbalanceData/data/abalone.data', sep=',')
-##da_abalone = pd.read_csv('D:/Research/AUC_IB/data/abalone.data', sep=',')
-#da_abalone = da_abalone.drop(columns='M')
-#da = da_abalone.values
-#Xall = da[:,0:7]
-#n1_ind = np.flatnonzero(da[:,7] == 18)
-#n0_ind = np.flatnonzero(da[:,7] == 9)
-#all_ind = np.concatenate((n1_ind, n0_ind))
-#Xall = da[all_ind, 0:7]
-#n, d = np.shape(Xall)
-#X_redundant = np.random.rand(n, d_redundant)
-#Xall = np.hstack((Xall, X_redundant))
-#Yall = np.zeros(len(all_ind))
-#Yall[0:len(n1_ind)] = 1
-#n, d = np.shape(Xall)
-#times = 10
+'''Abalone data'''
+da_abalone = pd.read_csv('/home/grad/yz486/ImbalanceData/data/abalone.data', sep=',')
+#da_abalone = pd.read_csv('D:/Research/AUC_IB/data/abalone.data', sep=',')
+da_abalone = da_abalone.drop(columns='M')
+da = da_abalone.values
+Xall = da[:,0:7]
+n1_ind = np.flatnonzero(da[:,7] == 18)
+n0_ind = np.flatnonzero(da[:,7] == 9)
+all_ind = np.concatenate((n1_ind, n0_ind))
+Xall = da[all_ind, 0:7]
+n, d = np.shape(Xall)
+X_redundant = np.random.rand(n, d_redundant)
+Xall = np.hstack((Xall, X_redundant))
+Yall = np.zeros(len(all_ind))
+Yall[0:len(n1_ind)] = 1
+n, d = np.shape(Xall)
+times = 10
 
 
 #'''For Satimage data'''
@@ -121,19 +121,19 @@ that corresponding paragraphs. Current this file is testing on "glass" data. '''
 #times = 5
 
 
-'''Glass data'''
-da_glass = pd.read_csv('/home/grad/yz486/ImbalanceData/data/glass.data', sep=',')
-#da_bcwe = da_bcw.drop(columns='M')
-da = da_glass.values
-Xall = da[:,1:10]
-n, d = np.shape(Xall)
-X_redundant = np.random.rand(n, d_redundant)
-Xall = np.hstack((Xall, X_redundant))
-n, d = np.shape(Xall)
-n1_ind = np.flatnonzero(da[:,10] == 7)
-Yall = np.zeros(np.shape(da)[0])
-Yall[n1_ind] = 1
-times = 5
+#'''Glass data'''
+#da_glass = pd.read_csv('/home/grad/yz486/ImbalanceData/data/glass.data', sep=',')
+##da_bcwe = da_bcw.drop(columns='M')
+#da = da_glass.values
+#Xall = da[:,1:10]
+#n, d = np.shape(Xall)
+#X_redundant = np.random.rand(n, d_redundant)
+#Xall = np.hstack((Xall, X_redundant))
+#n, d = np.shape(Xall)
+#n1_ind = np.flatnonzero(da[:,10] == 7)
+#Yall = np.zeros(np.shape(da)[0])
+#Yall[n1_ind] = 1
+#times = 5
 
 '''End of reading data sets. '''
 ###############################################################################
@@ -207,7 +207,7 @@ def experiment_runner(seed, Xall, Yall, n1, n0, pen_lst, weight, c0, alpha_lst):
         num_feats_r[j,1] +=sum(tr_svr_fs.feats_usage[(d-d_redundant):d])
 
     '''CART with duplicate resamples'''
-    sampler_now = sampler.sampler(times, 'random')
+    sampler_now = sampler.sampler(times, 'duplicate')
     Xtrain_res, Ytrain_res = sampler_now.fit_resample(Xtrain, Ytrain)
     tr_cart = Tree.tree()
     tr_cart.fit(Xtrain_res, Ytrain_res)

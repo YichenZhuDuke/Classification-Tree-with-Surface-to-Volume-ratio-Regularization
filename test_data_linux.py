@@ -104,26 +104,26 @@ that corresponding paragraphs. Current this file is testing on "glass" data. '''
 #n, d = np.shape(Xall)
 #times = 8
 
-#'''Wine data'''
-#da_wine = pd.read_csv('/home/grad/yz486/ImbalanceData/data/winequality-red.csv', sep=';')
-#da = da_wine.values
-#Xall = da[:,0:11]
-#Yall = np.zeros(np.shape(Xall)[0])
-#Yall[np.flatnonzero(da[:,11]>=7)] = 1
-#n, d = np.shape(Xall)
-#times = 5
-
-
-'''Glass data'''
-da_glass = pd.read_csv('/home/grad/yz486/ImbalanceData/data/glass.data', sep=',')
-#da_bcwe = da_bcw.drop(columns='M')
-da = da_glass.values
-Xall = da[:,1:10]
-n1_ind = np.flatnonzero(da[:,10] == 7)
-Yall = np.zeros(np.shape(da)[0])
-Yall[n1_ind] = 1
+'''Wine data'''
+da_wine = pd.read_csv('/home/grad/yz486/ImbalanceData/data/winequality-red.csv', sep=';')
+da = da_wine.values
+Xall = da[:,0:11]
+Yall = np.zeros(np.shape(Xall)[0])
+Yall[np.flatnonzero(da[:,11]>=7)] = 1
 n, d = np.shape(Xall)
 times = 5
+
+
+#'''Glass data'''
+#da_glass = pd.read_csv('/home/grad/yz486/ImbalanceData/data/glass.data', sep=',')
+##da_bcwe = da_bcw.drop(columns='M')
+#da = da_glass.values
+#Xall = da[:,1:10]
+#n1_ind = np.flatnonzero(da[:,10] == 7)
+#Yall = np.zeros(np.shape(da)[0])
+#Yall[n1_ind] = 1
+#n, d = np.shape(Xall)
+#times = 5
 
 
 '''End of reading data sets. '''
@@ -150,7 +150,7 @@ n0train = np.int_(np.ceil(n0*2/3))
 n0test = n0 - n0train
 ## The below alpha_lst is for common datasets
 alpha_lst = np.array([0, 1, 1.4, 2, 2.8, 4, 5.7, 8, 11, 16, 22, 32, 44, 64, 89, 128, 179, 256, 358, 512, 716, 1024]) * 10**(-3) * (n0train+n1train)**(-1/3)
-### The below alpha_lst is for satimage datasets
+## The below alpha_lst is for satimage datasets
 #alpha_lst = np.array([0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 15000, 30000, 60000, 120000]) * 10**(-3) * (n0train+n1train)**(-1/3)
 
 pen_lst = np.array([0, 1, 1.4, 2, 2.8, 4, 5.7, 8, 11, 16, 22, 32, 44, 64, 89, 128, 179, 256, 358, 512, 716, 1024]) * 10**(-3) * (n0train+n1train)**(-1/3)
@@ -191,7 +191,7 @@ def experiment_runner(seed, Xall, Yall, n1, n0, pen_lst, weight, c0, alpha_lst):
         Trate_svr_feat_select[j,1] = 1 - sum(abs((Ytest-Y_pred)[n1test:(n1test+n0test)])) / n0test   ##True negative rate 
         num_feats[j,1] +=sum(tr_svr_fs.feats_usage)        
     '''CART with duplicate resamples'''
-    sampler_now = sampler.sampler(times, 'random')
+    sampler_now = sampler.sampler(times, 'duplicate')
     Xtrain_res, Ytrain_res = sampler_now.fit_resample(Xtrain, Ytrain)
     tr_cart = Tree.tree()
     tr_cart.fit(Xtrain_res, Ytrain_res)

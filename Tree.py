@@ -366,7 +366,7 @@ class tree(node):
         if border == None:
             border = np.zeros((d,2))
             border[:,1] = 1
-        if not standardize or np.max(X)>1 or np.min(X)<0:
+        if not standardize:
             X = self.data_standardize(X)
         if min_split_weight == None:
             min_split_weight = weight+1
@@ -418,7 +418,9 @@ class tree(node):
             tree_sign_impu0 = tree_sign_impu - node.sign_impu * node.wn/wn_all
             
             featureid = -1         ## featureid=-1 means no better partition is found
-            for j in range(d):
+            feats_reorder = np.append(np.flatnonzero(feats_usage), np.flatnonzero(1-feats_usage))
+            node_impu_selected = node.impu
+            for j in feats_reorder:
                 checkpoints, slope01, intercept01, slope10, intercept10 = ans[j]
                 loc = 0          ## loc is the largest index of checkpoints that are no greater than thre
                 wleft = 0
@@ -435,9 +437,12 @@ class tree(node):
                     if (dat[sa+1][0] != dat[sa][0]):
                         thre_new = (dat[sa+1][0]+dat[sa][0]) / 2
                         node_impu_new = self.Compute_NodeImpu(wyleft, wleft, node.wy, node.wn)
-                        if feature_select and feats_usage[j] == False:
-                            if node.impu-node_impu_new < c0*pen*wn_all/node.wn:
-                                continue
+                        if feature_select:
+                            if feats_usage[j]:
+                                node_impu_selected = min(node_impu_selected, node_impu_new)
+                            else:
+                                if node_impu_selected-node_impu_new < c0*pen*wn_all/node.wn:
+                                    continue
                         tree_impu_new = node_impu_new * node.wn / wn_all + tree_impu0
                         while loc < len(checkpoints)-1 and checkpoints[loc+1] <= thre_new:
                             loc += 1
