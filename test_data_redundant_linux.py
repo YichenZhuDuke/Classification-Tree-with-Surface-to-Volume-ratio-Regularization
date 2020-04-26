@@ -2,7 +2,7 @@
 """
 Created on Thu Feb 20 17:09:08 2020
 
-@author: acezy
+@author: Yichen Zhu
 """
 import sys
 sys.path.append('D:/Research/AUC_IB/code2020')
