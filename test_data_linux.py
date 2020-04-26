@@ -5,7 +5,7 @@ Created on Thu Feb 20 17:09:08 2020
 This file is used to test the performance of SVR-Tree and other Tree based imbalanced
 classification methods. 
 
-@author: acezy
+@author: Yichen Zhu
 """
 
 import sys
