@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+ # -*- coding: utf-8 -*-
 """
 Created on Sat May 18 22:36:04 2019
 
@@ -10,6 +10,7 @@ CART and SVR-Tree methods.
 
 import numpy as np
 import collections
+import pdb
 
 
 def data_standardize(X):
@@ -136,184 +137,160 @@ class tree(node):
                 if impu_new < impu:
                     threshold = (dat[i+1][0]+dat[i][0]) / 2
                     impu = impu_new
-        return np.array([threshold, impu])      
-    
-    
+        return np.array([threshold, impu])     
+        
     @staticmethod
-    def Surface(rec):
-        ''' Compute surface value of "rec". '''
-        sidelen = rec[:,1] - rec[:,0]
-        S = 0
-        for i in range(len(sidelen)):
-            S = S + np.prod(np.delete(sidelen, i),dtype=float)
-        return 2*S
-    
-    @staticmethod
-    def Side_Overlap(amin, amax, bmin, bmax): 
-        ''' Compute overlapping side lengths. '''
-        return max(min(amax, bmax)-max(amin, bmin), 0)
-    
-    @staticmethod
-    def Surface_Overlap(rec1, rec2, featureid):
-        ''' Compute overlapping surface between two rectangles at the specified feature. '''
+    def Overlap_Rec(rec1, rec2):
         upmat = rec1.copy()
         upmat[:,0] = rec2[:,1]
         lowmat = rec1.copy()
         lowmat[:,1] = rec2[:,0]
-        upmat = np.delete(upmat, featureid, axis=0)
-        lowmat = np.delete(lowmat, featureid, axis=0)
-        sidelens = np.maximum(np.amin(upmat, axis=1)- np.amax(lowmat, axis=1), 0)
-        return np.prod(sidelens)
+        rec = rec1.copy()
+        rec[:,0] = np.amax(lowmat, axis=1)
+        rec[:,1] = np.amin(upmat, axis=1)
+        return rec
     
+    # @staticmethod
+    # def piecewise_fun(rec, overlap, sub_overlap, V, S, epsilon=10**(-6)):
+    #     d = np.shape(rec)[0]
+    #     ans = [None]*d
+    #     for j in range(d):
+    #         sub_overlap_j = sub_overlap[j]
+    #         slopes_changes = np.zeros((2*len(sub_overlap_j+1),2))
+    #         sidelen_j = rec[j,1] - rec[j,0]
+    #         for i in len(sub_overlap_j):
+    #             slopes_changes[i+i,:] = [sub_overlap_j[i][0], -sub_overlap_j[i][2]]
+    #             slopes_changes[i+i+1,:] = [sub_overlap_j[i][1], sub_overlap_j[i][2]]
+    #         slopes_changes = slopes_changes[np.argsort(slopes_changes[:,0]),:]
+    #         checkpoints = []
+    #         slopes = []
+    #         value = rec[j,0]
+    #         slope_all = (S - V/sidelen_j) / sidelen_j
+    #         sl = slope_all
+    #         for k in range(len(slopes_changes)): 
+    #             if np.abs(slopes_changes[k,0]-value) < epsilon:
+    #                 sl += slopes_changes[k,1]
+    #             else:
+    #                 checkpoints.append(value)
+    #                 slopes.append(sl)
+    #                 if np.abs(slopes_changes[k,0]-rec[j,1]) < epsilon:
+    #                     break
+    #         slopes10 = 2*slope - slope_all
+    #         intercepts10 = np.zero(len(checkpoints)) 
+    #         intercepts10[0] = overlap[]
+            
+            
+                
+        
+        
     
-    def surface_funs(self, rec, label, reclst0, labellst0):  
+    def surface_funs(self, rec, label, reclst0, labellst0, epsilon=10**(-12)):  
         ''' Returns all the necessary parameters to compute the change of surface of the whole
         tree once a new partition at rec is made. Currently only working for d>=3.
+        This function concerns all surfaces bordering and inside rec.
         '''
+        ## Processing all overlapping cells 
         d = np.shape(rec)[0]
-        reclst = []
-        contact_feat_lst = []     ## 'feat' means feature
-        contact_direct_lst = []
-        overlap_surf_lst = []
+        V = np.prod(rec[:,1] - rec[:,0])
+        S_faces = np.zeros(d)
+        overlap = np.zeros((d, 2))   ## the overlapping surface between rec and other rectangles that are labeled 1, at two faces of feature j
+        sub_overlap = [None]*d      ## sub_overlap is a list, with each element as [start, end, sub overlapping surface]
+        for j in range(d):
+            sub_overlap[j] = []
+            S_faces[j] = V / (rec[j,1] - rec[j,0])
+        S = np.sum(S_faces) * 2
+        ans = [None]*(d+1)
+        ## If reclst is empty:
+        if len(labellst0) == 0:
+            for j in range(d):
+                intercepts10 = [2*S_faces[j]]
+                slopes10 = [(S - S_faces[j]*2) / (rec[j,1] - rec[j,0])]
+                ans[j] = ([rec[j,0]], slopes10, intercepts10, S_faces[j])  
+            ans[d] = (0, S)
+            return ans
+            
         for i in range(len(labellst0)):
             if labellst0[i] == 0:
                 continue
-            recnow = reclst0[i]
+            recnow = reclst0[i]    
+            contact_feat = -1
             for j in range(d):
                 if rec[j,0] == recnow[j,1]:
+                    contact_feat = j
                     contact_direct = 0
+                    break
                 elif rec[j,1] == recnow[j,0]:
-                    contact_direct = 1
-                else:
-                    continue        
-                overlap_surf = self.Surface_Overlap(rec, recnow, j)
-                if overlap_surf > 0: 
-                    overlap_surf_lst.append(overlap_surf)
-                    reclst.append(recnow)
-                    contact_feat_lst.append(j)
-                    contact_direct_lst.append(contact_direct)
-                    break        
-        if label == 0:          ## The original surface of rec
-            s0 = sum(overlap_surf_lst)
-        else:                   ## The surface change when two childs are labeld the same:
-            s0 = self.Surface(rec) - sum(overlap_surf_lst)        
-        s_change_0 = sum(overlap_surf_lst) - s0
-        s_change_1 = self.Surface(rec) - sum(overlap_surf_lst) - s0  
+                    contact_feat = j
+                    contact_direct = 1 
+                    break
+            if contact_feat == -1:
+                continue
+            overlap_rec = self.Overlap_Rec(rec, recnow)
+            overlap_rec_del = np.delete(overlap_rec, contact_feat, axis=0)
+            if np.min(overlap_rec_del[:,1]-overlap_rec_del[:,0]) <= 0:
+                continue
+            overlap_V = np.prod(overlap_rec_del[:,1] - overlap_rec_del[:,0])
+            overlap[contact_feat, contact_direct] += overlap_V
+            feats = np.delete(np.arange(d), contact_feat)
+            for j in feats:
+                sub_overlap[j].append([overlap_rec[j,0], overlap_rec[j,1], overlap_V/(overlap_rec[j,1]-overlap_rec[j,0])])               
         
-        ans = [None] * (d+1)
-        ans[d] = (s_change_0, s_change_1)        
-        
+        ## Compute piecewise linear functions with overlapping information
+        s_0 = np.sum(overlap)
+        s_1 = S - s_0
+        ans[d] = (s_0, s_1)
         for j in range(d):
-            sidelen = rec[:,1] - rec[:,0]
-            surf_j = np.prod(np.delete(sidelen, j),dtype=float)            
-            surf_all = 0
-            for i in range(len(sidelen)):
-                surf_all = surf_all + np.prod(np.delete(sidelen, i),dtype=float)
-            sub_surf_max = 2*(surf_all - surf_j)/sidelen[j]
-            intercept01 = [s_change_1]      ## the intercept of surface function after partitioning rec, when left child labeled 0 and right child labeled 1
-            intercept10 = [s_change_0]      ## the intercept of surface function after partitioning rec, when left child labeled 1 and right child labeled 0
-            checkpoints = [rec[j,0]]
-            reclst_j = []
-            feat_low_j = []
-            feat_up_j = []
-            sub_surf_j = []
-            overlap_surf_down_j = 0
-            for i in range(len(reclst)):
-                if contact_feat_lst[i] == j:
-                    if contact_direct_lst[i] == 0:
-                        overlap_surf_down_j += overlap_surf_lst[i]
+            sub_overlap_j = sub_overlap[j]
+            if len(sub_overlap_j) == 0:
+                intercepts10 = [s_0 - overlap[j,0] + S_faces[j] - overlap[j,0] + S_faces[j]]
+                slopes10 = [(S - S_faces[j]*2) / (rec[j,1] - rec[j,0])]
+                ans[j] = ([rec[j,0]], slopes10, intercepts10, S_faces[j])   
+                continue
+            slopes_changes = np.zeros((2*len(sub_overlap_j),2))  ## both slopes_changes and slopes depicts slopes overlapping with elements of reclst with label 1
+            sidelen_j = rec[j,1] - rec[j,0]
+            for i in range(len(sub_overlap_j)):
+                slopes_changes[i+i,:] = [sub_overlap_j[i][0], sub_overlap_j[i][2]]
+                slopes_changes[i+i+1,:] = [sub_overlap_j[i][1], -sub_overlap_j[i][2]]
+            slopes_changes = slopes_changes[np.argsort(slopes_changes[:,0]),:]
+            checkpoints = []
+            slopes = []
+            value = rec[j,0]
+            slope_all = (S - S_faces[j]*2) / sidelen_j
+            sl = 0
+            for k in range(len(slopes_changes)): 
+                if np.abs(slopes_changes[k,0]-value) < epsilon:
+                    sl += slopes_changes[k,1]
                 else:
-                    recnow = reclst[i]
-                    reclst_j.append(recnow)
-                    feat_low_j.append(recnow[j,0])
-                    feat_up_j.append(recnow[j,1])
-                    if d > 2:
-                        sub_surf_j.append(self.Surface_Overlap(rec, recnow, [j,contact_feat_lst[i]]))
-                    else:
-                        sub_surf_j.append(1)
-            intercept01[0] = intercept01[0] + 2*overlap_surf_down_j
-            intercept10[0] = intercept10[0] + 2*surf_j - 2*overlap_surf_down_j
-            
-            if len(reclst_j) == 0:
-                slope01 = [-sub_surf_max]
-                slope10 = [sub_surf_max]
-            else:          
-                ind_low_j = np.argsort(feat_low_j)    ## the sorted indices of feat_low_j
-                ind_up_j = np.argsort(feat_up_j)
-    
-                low_loc = 0
-                up_loc = 0
-                slope_overlap = 0
-                feat_value = rec[j,0]
-                if feat_low_j[ind_low_j[low_loc]] <= rec[j,0]:
-                    low_loc_ext = low_loc+1
-                    while low_loc_ext+1<=len(ind_low_j):
-                        if feat_low_j[ind_low_j[low_loc_ext]]<=rec[j,0]:                    
-                            low_loc_ext += 1
-                        else:
-                            break
-                    for k in range(low_loc,low_loc_ext):
-                        slope_overlap += sub_surf_j[ind_low_j[k]]
-                    low_loc = low_loc_ext
-                slope01 = [2*slope_overlap - sub_surf_max]
-                slope10 = [sub_surf_max - 2*slope_overlap]            
-                checkpoints_num = 0  
-      
-                while up_loc < len(ind_up_j): 
-                    if low_loc < len(ind_low_j) and feat_low_j[ind_low_j[low_loc]] <= feat_up_j[ind_up_j[up_loc]]:
-                        feat_value_new = feat_low_j[ind_low_j[low_loc]]
-                        intercept01.append(intercept01[checkpoints_num] + slope01[checkpoints_num]*(feat_value_new-feat_value))
-                        intercept10.append(intercept10[checkpoints_num] + slope10[checkpoints_num]*(feat_value_new-feat_value))
-                        feat_value = feat_value_new
-                        checkpoints.append(feat_value)
-                        checkpoints_num += 1                    
-                        low_loc_ext = low_loc+1
-                        while low_loc_ext+1<=len(ind_low_j):
-                            if feat_low_j[ind_low_j[low_loc_ext]]==feat_value:                    
-                                low_loc_ext += 1
-                            else:
-                                break
-                        for k in range(low_loc,low_loc_ext):
-                            slope_overlap += sub_surf_j[ind_low_j[k]]
-                        if feat_low_j[ind_low_j[low_loc]] == feat_up_j[ind_up_j[up_loc]]:
-                            up_loc_ext = up_loc+1                    
-                            while up_loc_ext+1<=len(ind_up_j):
-                                if feat_up_j[ind_up_j[up_loc_ext]]==feat_value:                    
-                                    up_loc_ext += 1
-                                else:
-                                    break
-                            for k in range(up_loc,up_loc_ext):
-                                slope_overlap -= sub_surf_j[ind_up_j[k]] 
-                            up_loc = up_loc_ext
-                        low_loc = low_loc_ext                                        
-                    else:
-                        if feat_up_j[ind_up_j[up_loc]] >= rec[j,1]:
-                            break
-                        else:
-                            feat_value_new = feat_up_j[ind_up_j[up_loc]]
-                            intercept01.append(intercept01[checkpoints_num] + slope01[checkpoints_num]*(feat_value_new-feat_value))
-                            intercept10.append(intercept10[checkpoints_num] + slope10[checkpoints_num]*(feat_value_new-feat_value))
-                            feat_value = feat_value_new
-                            checkpoints.append(feat_value)
-                            checkpoints_num += 1                    
-                            up_loc_ext = up_loc+1                    
-                            while up_loc_ext+1<=len(ind_up_j):
-                                if feat_up_j[ind_up_j[up_loc_ext]]==feat_value:                    
-                                    up_loc_ext += 1
-                                else:
-                                    break
-                            for k in range(up_loc,up_loc_ext):
-                                slope_overlap -= sub_surf_j[ind_up_j[k]]
-                            up_loc = up_loc_ext     
-                    slope01.append(2*slope_overlap - sub_surf_max)
-                    slope10.append(sub_surf_max - 2*slope_overlap)
-                
-            ans[j] = (checkpoints, slope01, intercept01, slope10, intercept10)            
-        return(ans)
-            
+                    checkpoints.append(value)
+                    value = slopes_changes[k,0]
+                    slopes.append(sl)
+                    sl += slopes_changes[k,1]
+                    if np.abs(slopes_changes[k,0]-rec[j,1]) < epsilon:
+                        break
+            try:                
+                if len(checkpoints) == 0:
+                    intercepts10 = [s_0 - overlap[j,0] + S_faces[j] - overlap[j,0] + S_faces[j]]
+                    slopes10 = [(S - S_faces[j]*2) / (rec[j,1] - rec[j,0])]
+                    ans[j] = ([rec[j,0]], slopes10, intercepts10, S_faces[j])   
+                    continue
+                if np.abs(checkpoints[-1]-value) >= epsilon:
+                    checkpoints.append(value)
+                    slopes.append(sl)
+            except:
+                pdb.set_trace()
+                debug = checkpoints
+            slopes10 = slope_all - 2*np.array(slopes)
+            intercepts10 = np.zeros(len(checkpoints)) 
+            intercepts10[0] = s_0 - overlap[j,0] + S_faces[j] - overlap[j,0] + S_faces[j]
+            for k in range(1,len(checkpoints)):
+                if checkpoints[k] < checkpoints[k-1]:
+                    print('Error: invalid checkpoints: '+str(checkpoints))
+                intercepts10[k] = intercepts10[k-1] + slopes10[k-1]*(checkpoints[k]-checkpoints[k-1])
+            ans[j] = (checkpoints, slopes10, intercepts10, S_faces[j])            
+        return ans            
                 
     def fit_sv(self, X, Y, pen, feature_select=False, c0=1, weight=1, border=None, standardize=False, 
-               criterion='gini', min_split_weight=None, min_leaf_weight=None, tol=10**(-5), maximal_leaves=None):       
+               criterion='gini', min_split_weight=None, min_leaf_weight=None, tol=10**(-10), maximal_leaves=None):       
         '''
         Function to Fit a SVR-Tree.
         
@@ -383,8 +360,10 @@ class tree(node):
         tree_impu = self.impu
         tree_sign_impu = self.sign_impu
 
-        surface = self.Surface(border)
         volume = np.prod(border[:,1] - border[:,0])
+        surface = 0
+        for j in range(d):
+            surface += 2 * volume / (border[j,1]-border[j,0])
         sv_reg_min = self.sv_regular(surface, volume, d)
         risk = tree_impu + pen * sv_reg_min
         self.class_label = int(self.wy/self.wn>=0.5)
@@ -409,9 +388,16 @@ class tree(node):
             labellst = list(label_que)
             labellst.extend(labellst_leg)
             ans = self.surface_funs(rec, label, reclst, labellst)    ## ans contains information about changes of surface after partitions
-            s_change_0, s_change_1 = ans[d]
+            s_0, s_1 = ans[d]
+            if label == 1:
+                s_origin = s_1
+            else:
+                s_origin = s_0
             volume0 = volume - label * np.prod(rec[:,1] - rec[:,0])  ## The quantities subtitled by 0 remain unchanged through the next for loop
-            if volume0 < -tol / n:          ## a bug-checking procedure
+            # print(volume0, rec)
+            if volume0 < -tol:          ## a bug-checking procedure
+                pdb.set_trace()
+                print('Negative volume0: '+str(volume0))
                 raise Exception('Negative volume0: '+str(volume0))
             surface0 = surface
             tree_impu0 = tree_impu - node.impu * node.wn
@@ -420,23 +406,35 @@ class tree(node):
             featureid = -1         ## featureid=-1 means no better partition is found
             feats_reorder = np.append(np.flatnonzero(feats_usage), np.flatnonzero(1-feats_usage))
             node_impu_selected = node.impu
+            S_faces = np.zeros(d)
             for j in feats_reorder:
-                checkpoints, slope01, intercept01, slope10, intercept10 = ans[j]
+                checkpoints, slope10, intercept10, S_faces[j] = ans[j]
                 loc = 0          ## loc is the largest index of checkpoints that are no greater than thre
                 wleft = 0
                 wyleft = 0
                 dat = np.core.records.fromarrays(np.array([node.X[:,j], node.Y]), names='feature, label')
                 dat = np.sort(dat, order='feature')
-                for sa in range(len(node.Y)):    ## sa is short for sample                        
+                for sa in range(len(node.Y)-1):    ## sa is short for sample                        
                     wyleft = wyleft + weight*dat[sa][1]
                     wleft = wleft + 1 + (weight-1)*dat[sa][1]
-                    if wleft < min_leaf_weight:
+                    try:
+                        if wleft < min_leaf_weight or dat[sa][0]-rec[j,0] < tol:
+                            pass
+                        elif node.wn - wleft < min_leaf_weight or rec[j,1]-dat[sa+1][0]< tol:
+                            pass
+                    except:
+                        pdb.set_trace()
+                        print(dat[sa][0], dat[sa+1][0], rec[j,0], rec[j,1])
+                    if wleft < min_leaf_weight or dat[sa][0]-rec[j,0] < tol:
                         continue
-                    elif node.wn - wleft < min_leaf_weight:
+                    elif node.wn - wleft < min_leaf_weight or rec[j,1]-dat[sa+1][0]< tol:
                         break
                     if (dat[sa+1][0] != dat[sa][0]):
                         thre_new = (dat[sa+1][0]+dat[sa][0]) / 2
                         node_impu_new = self.Compute_NodeImpu(wyleft, wleft, node.wy, node.wn)
+                        while loc < len(checkpoints)-1 and checkpoints[loc+1] <= thre_new:
+                            loc += 1
+                            
                         if feature_select:
                             if feats_usage[j]:
                                 node_impu_selected = min(node_impu_selected, node_impu_new)
@@ -444,8 +442,7 @@ class tree(node):
                                 if node_impu_selected-node_impu_new < c0*pen*wn_all/node.wn:
                                     continue
                         tree_impu_new = node_impu_new * node.wn / wn_all + tree_impu0
-                        while loc < len(checkpoints)-1 and checkpoints[loc+1] <= thre_new:
-                            loc += 1
+
                         
                         tree_sign_impu_new_lst = [tree_sign_impu0]*4
                         surface_new_lst = [0,0,0,0]
@@ -454,36 +451,61 @@ class tree(node):
                         child_labels_lst = [[1,1], [0,0], [0,1], [1,0]]
                         
                         '''If both child nodes are labeled 1'''
-                        surface_new_lst[0] = surface0 + s_change_1
+                        surface_new_lst[0] = surface0 + s_1 - s_origin
                         volume_new_lst[0] = np.prod(rec[:,1] - rec[:,0]) + volume0
                         tree_sign_impu_new_lst[0] = tree_sign_impu_new_lst[0] + node.wn / wn_all * self.Compute_SignNodeImpu(wyleft, wleft, node.wy, node.wn, [1,1])
-                        risk_new_lst[0] = tree_sign_impu_new_lst[0] + pen*self.sv_regular(surface_new_lst[0], volume_new_lst[0], d) 
+                        if volume_new_lst[0] <= 0 or surface_new_lst[0] <= 0:
+                            svr = sv_reg_min
+                        else:
+                            svr = self.sv_regular(surface_new_lst[0], volume_new_lst[0], d) 
+                        risk_new_lst[0] = tree_sign_impu_new_lst[0] + pen*svr 
                         
                         '''If both child nodes are labeled 0'''
-                        surface_new_lst[1] = surface0 + s_change_0
+                        surface_new_lst[1] = surface0 + s_0 - s_origin
                         volume_new_lst[1] = volume0
                         tree_sign_impu_new_lst[1] = tree_sign_impu_new_lst[1] + node.wn / wn_all * self.Compute_SignNodeImpu(wyleft, wleft, node.wy, node.wn, [0,0])
-                        if volume_new_lst[1] == 0:
+                        if volume_new_lst[1] <= 0 or surface_new_lst[1] <= 0:
                             svr = sv_reg_min
                         else:
                             svr = self.sv_regular(surface_new_lst[1], volume_new_lst[1], d) 
                         risk_new_lst[1] = tree_sign_impu_new_lst[1] + pen*svr                    
 
                         '''If left child is labeled 0 and right child is labeled 1'''
-                        surface_new_lst[2] = surface0 + intercept01[loc] + slope01[loc]*(thre_new-checkpoints[loc])
+                        surface_new_lst[2] = surface0 + s_0 + s_1 + 2*S_faces[j] - (intercept10[loc] + slope10[loc]*(thre_new-checkpoints[loc])) - s_origin
                         volume_new_lst[2] = volume0 + np.prod(np.delete(rec[:,1],j)-np.delete(rec[:,0],j)) * (rec[j,1]-thre_new)
                         tree_sign_impu_new_lst[2] = tree_sign_impu_new_lst[2] + node.wn / wn_all * self.Compute_SignNodeImpu(wyleft, wleft, node.wy, node.wn, [0,1])
-                        risk_new_lst[2] = tree_sign_impu_new_lst[2] + pen*self.sv_regular(surface_new_lst[2], volume_new_lst[2], d) 
+                        if volume_new_lst[2] <= 0 or surface_new_lst[2] <= 0:
+                            svr = sv_reg_min
+                        else:
+                            svr = self.sv_regular(surface_new_lst[2], volume_new_lst[2], d)
+                        risk_new_lst[2] = tree_sign_impu_new_lst[2] + pen*svr 
 
                         '''If left child is labeled 1 and right child is labeled 0'''
-                        surface_new_lst[3] = surface0 + intercept10[loc] + slope10[loc]*(thre_new-checkpoints[loc])
+                        surface_new_lst[3] = surface0 + intercept10[loc] + slope10[loc]*(thre_new-checkpoints[loc]) - s_origin
                         volume_new_lst[3] = volume0 + np.prod(np.delete(rec[:,1],j)-np.delete(rec[:,0],j)) * (thre_new-rec[j,0])
                         tree_sign_impu_new_lst[3] = tree_sign_impu_new_lst[3] + node.wn / wn_all * self.Compute_SignNodeImpu(wyleft, wleft, node.wy, node.wn, [1,0])
-                        risk_new_lst[3] = tree_sign_impu_new_lst[3] + pen*self.sv_regular(surface_new_lst[3], volume_new_lst[3], d)    
+                        if volume_new_lst[3] <= 0 or surface_new_lst[3] <= 0:
+                            svr = sv_reg_min
+                        else:
+                            svr = self.sv_regular(surface_new_lst[3], volume_new_lst[3], d)
+                        risk_new_lst[3] = tree_sign_impu_new_lst[3] + pen*svr    
                         
                         argmin = np.argmin(risk_new_lst)
+                        
+                        if np.min(surface_new_lst) < - tol:
+                            print('reclst:', reclst)
+                            print('rec:', rec, 'len(reslst):', len(reclst))                            
+                            print('slope10:', slope10, 'intercept10:', intercept10)
+                            print('Negative surface: '+str(np.min(surface_new_lst))+'  pen: '+str(pen)+'  type: '+str(np.argmin(surface_new_lst)))
+                            print('volume0:', volume0, 'surface0:', surface0)
+                            print('featureid_now:', j, 'thre_now:', thre_new)
+                            
+                            pdb.set_trace()
+                            raise Exception('Negative surface: '+str(np.min(surface_new_lst))+'  pen:'+str(pen))
+                        if np.min(tree_sign_impu_new_lst) < - tol:
+                            print('Negative tree signed impurity: '+str(np.min(tree_sign_impu_new_lst)))
 
-                        if risk_new_lst[argmin] < risk:
+                        if risk_new_lst[argmin] < risk:                           
                             thre = thre_new
                             featureid = j
                             child_labels = child_labels_lst[argmin]
@@ -492,9 +514,14 @@ class tree(node):
                             tree_impu = tree_impu_new   
                             tree_sign_impu = tree_sign_impu_new_lst[argmin]
                             risk = risk_new_lst[argmin]
-                            if risk < -tol / n:
-                                raise Exception('Negative risk: '+str(risk))
-   
+                            if risk < -tol:
+                                print('Negative risk: '+str(risk)+'  pen:'+str(pen))
+                                print('signed impu: '+str(tree_sign_impu))
+                                print('volume: '+str(volume))
+                                print('surface: '+str(surface))
+                                pdb.set_trace()
+                                raise Exception('Negative risk: '+str(risk)+'  pen:'+str(pen))
+
             if featureid >= 0:                     ## i.e., a better partition is found
                 node.leaf = False
                 feats_usage[featureid] = True

@@ -149,7 +149,10 @@ class sampler():
             major_rate = np.zeros(n1)
             for i in range(n1):
                 major_rate[i] = 1 - sum(Y[Eall[i,:]])/m
-            major_rate = major_rate / np.average(major_rate)
+            if np.sum(major_rate) == 0:
+                major_rate = np.ones(n1)
+            else:
+                major_rate = major_rate / np.average(major_rate)
             n1res_lst = np.rint(major_rate * self.times)
             n1res_lst = n1res_lst.astype(int)
             n1_res = sum(n1res_lst)
